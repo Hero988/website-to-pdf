@@ -82,6 +82,7 @@ def find_internal_links(base_url: str) -> tuple[set[str], int, int]:
     base_netloc = urlparse(base_url).netloc
 
     links: set[str] = {base_url}
+    checked_links: set[str] = {base_url}
     invalid_count = 0
     total_internal = 0
 
@@ -110,20 +111,22 @@ def find_internal_links(base_url: str) -> tuple[set[str], int, int]:
             if urlparse(url).netloc != base_netloc:
                 continue
             total_internal += 1
-            if url not in links:
-                if _url_is_valid(url):
-                    links.add(url)
-                    to_visit.add(url)
-                    status = f"Valid: {url}"
-                else:
-                    invalid_count += 1
-                    status = f"Invalid: {url}"
-                _print_progress(
-                    "Checking links",
-                    idx,
-                    total,
-                    f"(total: {total_internal}, valid: {len(links)}, invalid: {invalid_count}) {status}",
-                )
+            if url in checked_links:
+                continue
+            checked_links.add(url)
+            if _url_is_valid(url):
+                links.add(url)
+                to_visit.add(url)
+                status = f"Valid: {url}"
+            else:
+                invalid_count += 1
+                status = f"Invalid: {url}"
+            _print_progress(
+                "Checking links",
+                idx,
+                total,
+                f"(total: {total_internal}, valid: {len(links)}, invalid: {invalid_count}) {status}",
+            )
         if not anchors:
             _print_progress(
                 "Checking links",
