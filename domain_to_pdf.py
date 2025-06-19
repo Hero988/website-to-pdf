@@ -6,17 +6,26 @@ import pdfkit
 from PyPDF2 import PdfWriter, PdfReader
 
 
+def _get_root_domain(netloc: str) -> str:
+    """Return the registrable part of a netloc (e.g. example.com)."""
+    parts = netloc.split('.')
+    if len(parts) >= 2:
+        return '.'.join(parts[-2:])
+    return netloc
+
+
 def find_subdomain_links(base_url):
     """Fetch base_url and return set of full URLs to subdomains within the same domain."""
     resp = requests.get(base_url)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, 'html.parser')
-    base_domain = urlparse(base_url).netloc
+    base_netloc = urlparse(base_url).netloc
+    base_root = _get_root_domain(base_netloc)
     links = set()
     for a in soup.find_all('a', href=True):
         url = urljoin(base_url, a['href'])
         netloc = urlparse(url).netloc
-        if netloc.endswith(base_domain) and netloc != base_domain:
+        if netloc and netloc != base_netloc and _get_root_domain(netloc) == base_root:
             links.add(url)
     return links
 
