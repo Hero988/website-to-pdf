@@ -9,7 +9,16 @@ import shutil
 import pdfkit
 from PyPDF2 import PdfWriter, PdfReader
 
-logging.basicConfig(level=logging.INFO, format="%(message)s")
+LOG_FILE = "website_to_pdf.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(LOG_FILE, mode="w", encoding="utf-8"),
+    ],
+)
 
 
 WKHTMLTOPDF_PATH = shutil.which("wkhtmltopdf")
