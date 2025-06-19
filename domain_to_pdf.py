@@ -50,6 +50,14 @@ def _url_is_valid(url: str) -> bool:
         return False
 
 
+def _print_progress(prefix: str, idx: int, total: int, message: str = "") -> None:
+    """Print a single-line progress bar with an optional message."""
+    bar_len = 30
+    filled_len = int(bar_len * idx / total)
+    bar = "#" * filled_len + "-" * (bar_len - filled_len)
+    print(f"\r{prefix} [{bar}] {idx}/{total} {message}", end="", flush=True)
+
+
 def find_internal_links(base_url: str) -> tuple[set[str], int, int]:
     """Return valid internal links and counters.
 
@@ -69,17 +77,25 @@ def find_internal_links(base_url: str) -> tuple[set[str], int, int]:
     invalid_count = 0
     total_internal = 0
 
-    for idx, a in _progress(anchors, prefix="Checking links"):
+    total = len(anchors)
+    for idx, a in enumerate(anchors, start=1):
         url = urljoin(base_url, a["href"])
         if urlparse(url).netloc != base_netloc:
             continue
         total_internal += 1
         if _url_is_valid(url):
-            info(f"Valid: {url}")
             links.add(url)
+            status = f"Valid: {url}"
         else:
-            error(f"Invalid: {url}")
             invalid_count += 1
+            status = f"Invalid: {url}"
+        _print_progress(
+            "Checking links",
+            idx,
+            total,
+            f"(total: {total_internal}, valid: {len(links)}, invalid: {invalid_count}) {status}",
+        )
+    print()
 
     return links, total_internal, invalid_count
 
