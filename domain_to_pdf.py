@@ -59,43 +59,69 @@ def _print_progress(prefix: str, idx: int, total: int, message: str = "") -> Non
 
 
 def find_internal_links(base_url: str) -> tuple[set[str], int, int]:
-    """Return valid internal links and counters.
+    """Return all valid internal links for ``base_url``.
 
-    Returns a tuple ``(links, total_internal, invalid_count)`` where ``links`` is
-    a set of valid internal URLs, ``total_internal`` is the number of internal
-    links encountered and ``invalid_count`` is how many of those were not valid.
+    The search is performed recursively so that links discovered on each
+    internal page are also scanned. The function returns a tuple
+    ``(links, total_internal, invalid_count)`` where ``links`` is a set of valid
+    internal URLs, ``total_internal`` is the number of internal links
+    encountered across the entire site and ``invalid_count`` is how many of
+    those links were not valid.
     """
 
-    resp = requests.get(base_url)
-    resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "html.parser")
-
     base_netloc = urlparse(base_url).netloc
-    anchors = soup.find_all("a", href=True)
 
-    links: set[str] = set()
+    links: set[str] = {base_url}
     invalid_count = 0
     total_internal = 0
 
-    total = len(anchors)
-    for idx, a in enumerate(anchors, start=1):
-        url = urljoin(base_url, a["href"])
-        if urlparse(url).netloc != base_netloc:
+    to_visit: set[str] = {base_url}
+    visited_pages: set[str] = set()
+
+    while to_visit:
+        page_url = to_visit.pop()
+        if page_url in visited_pages:
             continue
-        total_internal += 1
-        if _url_is_valid(url):
-            links.add(url)
-            status = f"Valid: {url}"
-        else:
+        visited_pages.add(page_url)
+
+        try:
+            resp = requests.get(page_url, timeout=5)
+            resp.raise_for_status()
+        except requests.RequestException:
             invalid_count += 1
-            status = f"Invalid: {url}"
-        _print_progress(
-            "Checking links",
-            idx,
-            total,
-            f"(total: {total_internal}, valid: {len(links)}, invalid: {invalid_count}) {status}",
-        )
-    print()
+            continue
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+        anchors = soup.find_all("a", href=True)
+
+        total = len(anchors)
+        for idx, a in enumerate(anchors, start=1):
+            url = urljoin(page_url, a["href"])
+            if urlparse(url).netloc != base_netloc:
+                continue
+            total_internal += 1
+            if url not in links:
+                if _url_is_valid(url):
+                    links.add(url)
+                    to_visit.add(url)
+                    status = f"Valid: {url}"
+                else:
+                    invalid_count += 1
+                    status = f"Invalid: {url}"
+                _print_progress(
+                    "Checking links",
+                    idx,
+                    total,
+                    f"(total: {total_internal}, valid: {len(links)}, invalid: {invalid_count}) {status}",
+                )
+        if not anchors:
+            _print_progress(
+                "Checking links",
+                1,
+                1,
+                f"(total: {total_internal}, valid: {len(links)}, invalid: {invalid_count})",
+            )
+        print()
 
     return links, total_internal, invalid_count
 
