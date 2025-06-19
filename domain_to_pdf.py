@@ -10,6 +10,19 @@ import shutil
 import pdfkit
 from PyPDF2 import PdfWriter, PdfReader
 
+# Remove arguments injected by IPython (e.g. "-f <connection file>") so that
+# interactive input works when running inside notebooks like Google Colab.
+def _remove_ipykernel_args() -> None:
+    if "-f" in sys.argv:
+        f_index = sys.argv.index("-f")
+        # Remove '-f' and the path that follows it if present
+        if f_index < len(sys.argv) - 1:
+            del sys.argv[f_index : f_index + 2]
+        else:
+            del sys.argv[f_index]
+
+_remove_ipykernel_args()
+
 # Simple colored output helpers
 GREEN = "\033[92m"
 RED = "\033[91m"
