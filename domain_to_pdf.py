@@ -180,14 +180,16 @@ def _progress(iterable: Iterable[str], prefix: str = ""):
     print()
 
 
-def main(domain):
-    info("Validating domain...")
+def process_domain(domain: str) -> None:
+    """Process ``domain`` by downloading and merging its pages."""
+
+    info(f"Validating domain {domain}...")
     if not domain.startswith("http"):
         domain = "http://" + domain
 
     if not _url_is_valid(domain):
         error(f"Domain '{domain}' is not reachable.")
-        sys.exit(1)
+        return
 
     info("Scanning for internal links...")
     pages, total_internal, invalid_count = find_internal_links(domain)
@@ -201,20 +203,33 @@ def main(domain):
         info("No internal links found.")
         return
 
-    pdf_paths: list[str] = []
+    netloc = urlparse(domain).netloc
+    output_dir = os.path.join("pdfs", netloc)
 
-    for idx, url in _progress(pages, prefix="Saving PDFs"):
-        pdf_path = save_page_as_pdf(url, "pdfs")
+    pdf_paths: list[str] = []
+    for idx, url in _progress(pages, prefix=f"Saving PDFs ({netloc})"):
+        pdf_path = save_page_as_pdf(url, output_dir)
         pdf_paths.append(pdf_path)
 
+    output_pdf = os.path.join(output_dir, f"{netloc}.pdf")
     info("Merging PDFs...")
-    merge_pdfs(pdf_paths, "internal_pages.pdf")
-    info("Combined PDF saved as internal_pages.pdf")
+    merge_pdfs(pdf_paths, output_pdf)
+    info(f"Combined PDF saved as {output_pdf}")
+
+
+def main(domains: list[str]) -> None:
+    for domain in domains:
+        process_domain(domain)
 
 
 if __name__ == '__main__':
-    domain = input('Enter domain: ').strip()
-    if not domain:
+    if len(sys.argv) > 1:
+        domains = sys.argv[1:]
+    else:
+        domains = input('Enter domain(s) separated by spaces: ').split()
+
+    if not domains:
         print('No domain provided.')
         sys.exit(1)
-    main(domain)
+
+    main(domains)
