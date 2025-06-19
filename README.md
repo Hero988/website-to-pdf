@@ -31,6 +31,8 @@ IPython so you can simply run:
 ```bash
 !python domain_to_pdf.py
 ```
-
 If you do not pass domains on the command line, the script will prompt you to
 enter them interactively.
+
+Progress output is updated in-place using IPython's display utilities so the
+progress bars remain tidy in notebook cells.
