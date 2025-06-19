@@ -51,11 +51,21 @@ def _url_is_valid(url: str) -> bool:
 
 
 def _print_progress(prefix: str, idx: int, total: int, message: str = "") -> None:
-    """Print a single-line progress bar with an optional message."""
+    """Print a single-line progress bar with an optional message.
+
+    This helper attempts to keep the output on a single line so the
+    progress looks clean even when the terminal does not fully support
+    carriage return based updates.
+    """
+
     bar_len = 30
     filled_len = int(bar_len * idx / total)
     bar = "#" * filled_len + "-" * (bar_len - filled_len)
-    print(f"\r{prefix} [{bar}] {idx}/{total} {message}", end="", flush=True)
+    line = f"{prefix} [{bar}] {idx}/{total} {message}"
+
+    # Clear any leftover characters from the previous line by padding the
+    # output. 120 characters should be plenty for our messages.
+    print("\r" + line.ljust(120), end="", flush=True)
 
 
 def find_internal_links(base_url: str) -> tuple[set[str], int, int]:
@@ -153,13 +163,17 @@ def merge_pdfs(pdf_paths, output_file):
 
 
 def _progress(iterable: Iterable[str], prefix: str = ""):
+    """Yield items from ``iterable`` while printing a simple progress bar."""
+
     total = len(iterable)
     for idx, item in enumerate(iterable, start=1):
         bar_len = 30
         filled_len = int(bar_len * idx / total)
         bar = "#" * filled_len + "-" * (bar_len - filled_len)
-        print(f"\r{prefix} [{bar}] {idx}/{total}", end="", flush=True)
+        line = f"{prefix} [{bar}] {idx}/{total}"
+        print("\r" + line.ljust(120), end="", flush=True)
         yield idx, item
+
     print()
 
 
