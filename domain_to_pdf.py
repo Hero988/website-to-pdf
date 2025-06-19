@@ -10,6 +10,12 @@ import shutil
 import pdfkit
 from PyPDF2 import PdfWriter, PdfReader
 
+try:
+    from IPython.display import clear_output
+    _IN_IPYTHON = True
+except Exception:
+    _IN_IPYTHON = False
+
 # Remove arguments injected by IPython (e.g. "-f <connection file>") so that
 # interactive input works when running inside notebooks like Google Colab.
 def _remove_ipykernel_args() -> None:
@@ -41,6 +47,18 @@ WKHTMLTOPDF_PATH = shutil.which("wkhtmltopdf")
 _PDFKIT_CONFIG = (
     pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH) if WKHTMLTOPDF_PATH else None
 )
+
+
+def _display_line(line: str) -> None:
+    """Display ``line`` appropriately for terminal or Jupyter."""
+    if _IN_IPYTHON:
+        # Overwrite the output cell in notebooks so progress looks clean.
+        clear_output(wait=True)
+        print(line)
+    else:
+        # Clear any leftover characters from the previous line by padding the
+        # output. 120 characters should be plenty for our messages.
+        print("\r" + line.ljust(120), end="", flush=True)
 
 
 def _url_is_valid(url: str) -> bool:
@@ -77,9 +95,7 @@ def _print_progress(prefix: str, idx: int, total: int, message: str = "") -> Non
     bar = "#" * filled_len + "-" * (bar_len - filled_len)
     line = f"{prefix} [{bar}] {idx}/{total} {message}"
 
-    # Clear any leftover characters from the previous line by padding the
-    # output. 120 characters should be plenty for our messages.
-    print("\r" + line.ljust(120), end="", flush=True)
+    _display_line(line)
 
 
 def find_internal_links(base_url: str) -> tuple[set[str], int, int]:
@@ -188,7 +204,7 @@ def _progress(iterable: Iterable[str], prefix: str = ""):
         filled_len = int(bar_len * idx / total)
         bar = "#" * filled_len + "-" * (bar_len - filled_len)
         line = f"{prefix} [{bar}] {idx}/{total}"
-        print("\r" + line.ljust(120), end="", flush=True)
+        _display_line(line)
         yield idx, item
 
     print()
