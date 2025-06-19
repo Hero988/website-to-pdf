@@ -18,8 +18,6 @@ python domain_to_pdf.py
 ```
 
 The script will create a `pdfs` directory with individual PDFs and an `internal_pages.pdf` file containing all merged pages.
-Internal links are validated before processing to avoid invalid pages. Any page that contains the text "Error 404" is skipped.
+Internal links are validated as they are discovered so invalid pages are skipped immediately. Any page that contains the text "Error 404" is skipped.
 
-Progress is displayed in the console so you can follow validation, link discovery,
-page saving and PDF merging without flooding your terminal. A simple progress bar
-shows the download of each page.
+Progress is displayed in the console so you can follow link validation, page saving and PDF merging without flooding your terminal. A simple progress bar shows the download of each page.
