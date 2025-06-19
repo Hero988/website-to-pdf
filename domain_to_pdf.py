@@ -1,12 +1,15 @@
 import os
 import sys
 from urllib.parse import urlparse, urljoin
+import logging
 
 import requests
 from bs4 import BeautifulSoup
 import shutil
 import pdfkit
 from PyPDF2 import PdfWriter, PdfReader
+
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 WKHTMLTOPDF_PATH = shutil.which("wkhtmltopdf")
@@ -81,26 +84,33 @@ def merge_pdfs(pdf_paths, output_file):
 
 
 def main(domain):
-    if not domain.startswith("http"):  # Add scheme if missing
+    logging.info("Validating domain...")
+    if not domain.startswith("http"):
         domain = "http://" + domain
 
     if not _url_is_valid(domain):
-        print(f"Domain '{domain}' is not reachable.")
+        logging.error(f"Domain '{domain}' is not reachable.")
         sys.exit(1)
 
+    logging.info("Scanning for internal links...")
     pages = find_internal_links(domain)
+
+    if pages:
+        logging.info(f"Found {len(pages)} internal pages.")
+    else:
+        logging.info("No internal links found.")
+        return
+
     pdf_paths: list[str] = []
 
-    for url in pages:
-        print(f"Saving {url}...")
+    for idx, url in enumerate(pages, start=1):
+        logging.info(f"[{idx}/{len(pages)}] Saving {url}...")
         pdf_path = save_page_as_pdf(url, "pdfs")
         pdf_paths.append(pdf_path)
 
-    if pdf_paths:
-        merge_pdfs(pdf_paths, "internal_pages.pdf")
-        print("Combined PDF saved as internal_pages.pdf")
-    else:
-        print("No internal links found.")
+    logging.info("Merging PDFs...")
+    merge_pdfs(pdf_paths, "internal_pages.pdf")
+    logging.info("Combined PDF saved as internal_pages.pdf")
 
 
 if __name__ == '__main__':
