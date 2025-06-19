@@ -1,7 +1,7 @@
 import os
 import sys
 from urllib.parse import urlparse, urljoin
-import logging
+from typing import Iterable
 
 import requests
 from bs4 import BeautifulSoup
@@ -9,16 +9,18 @@ import shutil
 import pdfkit
 from PyPDF2 import PdfWriter, PdfReader
 
-LOG_FILE = "website_to_pdf.log"
+# Simple colored output helpers
+GREEN = "\033[92m"
+RED = "\033[91m"
+RESET = "\033[0m"
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(message)s",
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler(LOG_FILE, mode="w", encoding="utf-8"),
-    ],
-)
+
+def info(message: str) -> None:
+    print(f"{GREEN}{message}{RESET}")
+
+
+def error(message: str) -> None:
+    print(f"{RED}{message}{RESET}")
 
 
 WKHTMLTOPDF_PATH = shutil.which("wkhtmltopdf")
@@ -30,34 +32,21 @@ _PDFKIT_CONFIG = (
 def _url_is_valid(url: str) -> bool:
     """Return ``True`` if ``url`` resolves successfully and is not a 404 page."""
 
-    logging.info(f"Validating URL: {url}")
-
     try:
-        logging.info("\tSending HEAD request")
         head_resp = requests.head(url, allow_redirects=True, timeout=5)
-        logging.info(f"\tHEAD status code: {head_resp.status_code}")
         if head_resp.status_code >= 400:
-            logging.info("\tHEAD request failed")
             return False
-    except requests.RequestException as exc:
-        logging.info(f"\tHEAD request error: {exc}")
-        # Some servers may not handle HEAD requests
+    except requests.RequestException:
         pass
 
     try:
-        logging.info("\tSending GET request")
         resp = requests.get(url, allow_redirects=True, timeout=5)
-        logging.info(f"\tGET status code: {resp.status_code}")
         if resp.status_code >= 400:
-            logging.info("\tGET request failed")
             return False
         if "error 404" in resp.text.lower():
-            logging.info("\tFound 'error 404' text in body")
             return False
-        logging.info("\tURL is valid")
         return True
-    except requests.RequestException as exc:
-        logging.info(f"\tGET request error: {exc}")
+    except requests.RequestException:
         return False
 
 
@@ -104,34 +93,44 @@ def merge_pdfs(pdf_paths, output_file):
         writer.write(f)
 
 
+def _progress(iterable: Iterable[str], prefix: str = ""):
+    total = len(iterable)
+    for idx, item in enumerate(iterable, start=1):
+        bar_len = 30
+        filled_len = int(bar_len * idx / total)
+        bar = "#" * filled_len + "-" * (bar_len - filled_len)
+        print(f"\r{prefix} [{bar}] {idx}/{total}", end="", flush=True)
+        yield idx, item
+    print()
+
+
 def main(domain):
-    logging.info("Validating domain...")
+    info("Validating domain...")
     if not domain.startswith("http"):
         domain = "http://" + domain
 
     if not _url_is_valid(domain):
-        logging.error(f"Domain '{domain}' is not reachable.")
+        error(f"Domain '{domain}' is not reachable.")
         sys.exit(1)
 
-    logging.info("Scanning for internal links...")
-    pages = find_internal_links(domain)
+    info("Scanning for internal links...")
+    pages = list(find_internal_links(domain))
 
     if pages:
-        logging.info(f"Found {len(pages)} internal pages.")
+        info(f"Found {len(pages)} internal pages.")
     else:
-        logging.info("No internal links found.")
+        info("No internal links found.")
         return
 
     pdf_paths: list[str] = []
 
-    for idx, url in enumerate(pages, start=1):
-        logging.info(f"[{idx}/{len(pages)}] Saving {url}...")
+    for idx, url in _progress(pages, prefix="Saving pages"):
         pdf_path = save_page_as_pdf(url, "pdfs")
         pdf_paths.append(pdf_path)
 
-    logging.info("Merging PDFs...")
+    info("Merging PDFs...")
     merge_pdfs(pdf_paths, "internal_pages.pdf")
-    logging.info("Combined PDF saved as internal_pages.pdf")
+    info("Combined PDF saved as internal_pages.pdf")
 
 
 if __name__ == '__main__':
