@@ -1,5 +1,6 @@
 import os
 import sys
+import argparse
 from urllib.parse import urlparse, urljoin
 from typing import Iterable
 
@@ -223,9 +224,12 @@ def main(domains: list[str]) -> None:
 
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        domains = sys.argv[1:]
-    else:
+    parser = argparse.ArgumentParser(add_help=True)
+    parser.add_argument('domains', nargs='*', help='Domain(s) to process')
+    args, _ = parser.parse_known_args()
+
+    domains = args.domains
+    if not domains:
         domains = input('Enter domain(s) separated by spaces: ').split()
 
     if not domains:
