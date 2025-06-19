@@ -1,26 +1,8 @@
 import os
 import sys
-import subprocess
 from urllib.parse import urlparse, urljoin
 
 
-def _ensure_colab_dependencies() -> None:
-    """Install required packages when running on Google Colab."""
-    try:
-        import google.colab  # type: ignore
-    except ImportError:  # Not running on Colab
-        return
-
-    # Install wkhtmltopdf via apt and required python packages
-    subprocess.run(["apt-get", "update"], check=False)
-    subprocess.run(["apt-get", "install", "-y", "wkhtmltopdf"], check=False)
-    subprocess.run(
-        [sys.executable, "-m", "pip", "install", "pdfkit", "requests", "beautifulsoup4", "PyPDF2"],
-        check=False,
-    )
-
-
-_ensure_colab_dependencies()
 
 import requests
 from bs4 import BeautifulSoup
@@ -96,8 +78,8 @@ def main(domain):
 
 
 if __name__ == '__main__':
-    import sys
-    if len(sys.argv) != 2:
-        print('Usage: python domain_to_pdf.py <domain>')
+    domain = input('Enter domain: ').strip()
+    if not domain:
+        print('No domain provided.')
         sys.exit(1)
-    main(sys.argv[1])
+    main(domain)

@@ -10,10 +10,11 @@ This repository contains a Python script that downloads the internal pages of a 
 - `PyPDF2`
 
 ## Usage
-Run the script with a domain name:
+
+Run the script and provide a domain when prompted:
 
 ```bash
-python domain_to_pdf.py example.com
+python domain_to_pdf.py
 ```
 
 The script will create a `pdfs` directory with individual PDFs and an `internal_pages.pdf` file containing all merged pages.
