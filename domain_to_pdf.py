@@ -2,8 +2,6 @@ import os
 import sys
 from urllib.parse import urlparse, urljoin
 
-
-
 import requests
 from bs4 import BeautifulSoup
 import shutil
@@ -12,7 +10,24 @@ from PyPDF2 import PdfWriter, PdfReader
 
 
 WKHTMLTOPDF_PATH = shutil.which("wkhtmltopdf")
-_PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH) if WKHTMLTOPDF_PATH else None
+_PDFKIT_CONFIG = (
+    pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH) if WKHTMLTOPDF_PATH else None
+)
+
+
+def _url_is_valid(url: str) -> bool:
+    """Return ``True`` if ``url`` resolves successfully (status < 400)."""
+    try:
+        resp = requests.head(url, allow_redirects=True, timeout=5)
+        if resp.status_code < 400:
+            return True
+    except requests.RequestException:
+        pass
+    try:
+        with requests.get(url, allow_redirects=True, stream=True, timeout=5) as resp:
+            return resp.status_code < 400
+    except requests.RequestException:
+        return False
 
 
 def find_internal_links(base_url: str) -> set[str]:
@@ -26,7 +41,7 @@ def find_internal_links(base_url: str) -> set[str]:
 
     for a in soup.find_all("a", href=True):
         url = urljoin(base_url, a["href"])
-        if urlparse(url).netloc == base_netloc:
+        if urlparse(url).netloc == base_netloc and _url_is_valid(url):
             links.add(url)
 
     return links
@@ -61,6 +76,10 @@ def merge_pdfs(pdf_paths, output_file):
 def main(domain):
     if not domain.startswith("http"):  # Add scheme if missing
         domain = "http://" + domain
+
+    if not _url_is_valid(domain):
+        print(f"Domain '{domain}' is not reachable.")
+        sys.exit(1)
 
     pages = find_internal_links(domain)
     pdf_paths: list[str] = []
