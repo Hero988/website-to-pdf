@@ -50,21 +50,38 @@ def _url_is_valid(url: str) -> bool:
         return False
 
 
-def find_internal_links(base_url: str) -> set[str]:
-    """Return a set of full URLs that are internal to ``base_url``."""
+def find_internal_links(base_url: str) -> tuple[set[str], int, int]:
+    """Return valid internal links and counters.
+
+    Returns a tuple ``(links, total_internal, invalid_count)`` where ``links`` is
+    a set of valid internal URLs, ``total_internal`` is the number of internal
+    links encountered and ``invalid_count`` is how many of those were not valid.
+    """
+
     resp = requests.get(base_url)
     resp.raise_for_status()
     soup = BeautifulSoup(resp.text, "html.parser")
 
     base_netloc = urlparse(base_url).netloc
+    anchors = soup.find_all("a", href=True)
+
     links: set[str] = set()
+    invalid_count = 0
+    total_internal = 0
 
-    for a in soup.find_all("a", href=True):
+    for idx, a in _progress(anchors, prefix="Checking links"):
         url = urljoin(base_url, a["href"])
-        if urlparse(url).netloc == base_netloc and _url_is_valid(url):
+        if urlparse(url).netloc != base_netloc:
+            continue
+        total_internal += 1
+        if _url_is_valid(url):
+            info(f"Valid: {url}")
             links.add(url)
+        else:
+            error(f"Invalid: {url}")
+            invalid_count += 1
 
-    return links
+    return links, total_internal, invalid_count
 
 
 def save_page_as_pdf(url: str, output_dir: str) -> str:
@@ -114,17 +131,20 @@ def main(domain):
         sys.exit(1)
 
     info("Scanning for internal links...")
-    pages = list(find_internal_links(domain))
+    pages, total_internal, invalid_count = find_internal_links(domain)
+    valid_count = len(pages)
 
-    if pages:
-        info(f"Found {len(pages)} internal pages.")
+    if total_internal:
+        info(
+            f"Checked {total_internal} internal links: {valid_count} valid, {invalid_count} invalid."
+        )
     else:
         info("No internal links found.")
         return
 
     pdf_paths: list[str] = []
 
-    for idx, url in _progress(pages, prefix="Saving pages"):
+    for idx, url in _progress(pages, prefix="Saving PDFs"):
         pdf_path = save_page_as_pdf(url, "pdfs")
         pdf_paths.append(pdf_path)
 
