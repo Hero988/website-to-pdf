@@ -1,10 +1,36 @@
 import os
+import sys
+import subprocess
 from urllib.parse import urlparse, urljoin
+
+
+def _ensure_colab_dependencies() -> None:
+    """Install required packages when running on Google Colab."""
+    try:
+        import google.colab  # type: ignore
+    except ImportError:  # Not running on Colab
+        return
+
+    # Install wkhtmltopdf via apt and required python packages
+    subprocess.run(["apt-get", "update"], check=False)
+    subprocess.run(["apt-get", "install", "-y", "wkhtmltopdf"], check=False)
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "pdfkit", "requests", "beautifulsoup4", "PyPDF2"],
+        check=False,
+    )
+
+
+_ensure_colab_dependencies()
 
 import requests
 from bs4 import BeautifulSoup
+import shutil
 import pdfkit
 from PyPDF2 import PdfWriter, PdfReader
+
+
+WKHTMLTOPDF_PATH = shutil.which("wkhtmltopdf")
+_PDFKIT_CONFIG = pdfkit.configuration(wkhtmltopdf=WKHTMLTOPDF_PATH) if WKHTMLTOPDF_PATH else None
 
 
 def find_internal_links(base_url: str) -> set[str]:
@@ -35,7 +61,7 @@ def save_page_as_pdf(url: str, output_dir: str) -> str:
     filename = f"{parsed.netloc.replace('.', '_')}_{path.replace('/', '_')}.pdf"
 
     output_path = os.path.join(output_dir, filename)
-    pdfkit.from_url(url, output_path)
+    pdfkit.from_url(url, output_path, configuration=_PDFKIT_CONFIG)
     return output_path
 
 
