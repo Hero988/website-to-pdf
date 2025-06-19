@@ -16,16 +16,23 @@ _PDFKIT_CONFIG = (
 
 
 def _url_is_valid(url: str) -> bool:
-    """Return ``True`` if ``url`` resolves successfully (status < 400)."""
+    """Return ``True`` if ``url`` resolves successfully and is not a 404 page."""
+
     try:
-        resp = requests.head(url, allow_redirects=True, timeout=5)
-        if resp.status_code < 400:
-            return True
+        head_resp = requests.head(url, allow_redirects=True, timeout=5)
+        if head_resp.status_code >= 400:
+            return False
     except requests.RequestException:
+        # Some servers may not handle HEAD requests
         pass
+
     try:
-        with requests.get(url, allow_redirects=True, stream=True, timeout=5) as resp:
-            return resp.status_code < 400
+        resp = requests.get(url, allow_redirects=True, timeout=5)
+        if resp.status_code >= 400:
+            return False
+        if "error 404" in resp.text.lower():
+            return False
+        return True
     except requests.RequestException:
         return False
 

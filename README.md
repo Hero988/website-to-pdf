@@ -18,4 +18,4 @@ python domain_to_pdf.py
 ```
 
 The script will create a `pdfs` directory with individual PDFs and an `internal_pages.pdf` file containing all merged pages.
-Internal links are validated before processing to avoid invalid pages.
+Internal links are validated before processing to avoid invalid pages. Any page that contains the text "Error 404" is skipped.
