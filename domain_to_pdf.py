@@ -3,6 +3,7 @@ import sys
 import argparse
 from urllib.parse import urlparse, urljoin
 from typing import Iterable
+import concurrent.futures
 
 import requests
 from bs4 import BeautifulSoup
@@ -61,18 +62,20 @@ def _display_line(line: str) -> None:
         print("\r" + line.ljust(120), end="", flush=True)
 
 
-def _url_is_valid(url: str) -> bool:
+def _url_is_valid(url: str, session: requests.Session | None = None) -> bool:
     """Return ``True`` if ``url`` resolves successfully and is not a 404 page."""
 
+    sess = session or requests
+
     try:
-        head_resp = requests.head(url, allow_redirects=True, timeout=5)
+        head_resp = sess.head(url, allow_redirects=True, timeout=5)
         if head_resp.status_code >= 400:
             return False
     except requests.RequestException:
         pass
 
     try:
-        resp = requests.get(url, allow_redirects=True, timeout=5)
+        resp = sess.get(url, allow_redirects=True, timeout=5)
         if resp.status_code >= 400:
             return False
         if "error 404" in resp.text.lower():
@@ -98,7 +101,7 @@ def _print_progress(prefix: str, idx: int, total: int, message: str = "") -> Non
     _display_line(line)
 
 
-def find_internal_links(base_url: str) -> tuple[set[str], int, int]:
+def find_internal_links(base_url: str, workers: int = 10) -> tuple[set[str], int, int]:
     """Return all valid internal links for ``base_url``.
 
     The search is performed recursively so that links discovered on each
@@ -111,6 +114,8 @@ def find_internal_links(base_url: str) -> tuple[set[str], int, int]:
 
     base_netloc = urlparse(base_url).netloc
 
+    session = requests.Session()
+
     links: set[str] = {base_url}
     checked_links: set[str] = {base_url}
     invalid_count = 0
@@ -119,53 +124,67 @@ def find_internal_links(base_url: str) -> tuple[set[str], int, int]:
     to_visit: set[str] = {base_url}
     visited_pages: set[str] = set()
 
-    while to_visit:
-        page_url = to_visit.pop()
-        if page_url in visited_pages:
-            continue
-        visited_pages.add(page_url)
-
-        try:
-            resp = requests.get(page_url, timeout=5)
-            resp.raise_for_status()
-        except requests.RequestException:
-            invalid_count += 1
-            continue
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-        anchors = soup.find_all("a", href=True)
-
-        total = len(anchors)
-        for idx, a in enumerate(anchors, start=1):
-            url = urljoin(page_url, a["href"])
-            if urlparse(url).netloc != base_netloc:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
+        while to_visit:
+            page_url = to_visit.pop()
+            if page_url in visited_pages:
                 continue
-            total_internal += 1
-            if url in checked_links:
-                continue
-            checked_links.add(url)
-            if _url_is_valid(url):
-                links.add(url)
-                to_visit.add(url)
-                status = f"Valid: {url}"
-            else:
+            visited_pages.add(page_url)
+
+            try:
+                resp = session.get(page_url, timeout=5)
+                resp.raise_for_status()
+            except requests.RequestException:
                 invalid_count += 1
-                status = f"Invalid: {url}"
-            _print_progress(
-                "Checking links",
-                idx,
-                total,
-                f"(total: {total_internal}, valid: {len(links)}, invalid: {invalid_count}) {status}",
-            )
-        if not anchors:
-            _print_progress(
-                "Checking links",
-                1,
-                1,
-                f"(total: {total_internal}, valid: {len(links)}, invalid: {invalid_count})",
-            )
-        print()
+                continue
 
+            soup = BeautifulSoup(resp.text, "html.parser")
+            anchors = soup.find_all("a", href=True)
+
+            internal_urls: list[str] = []
+            for a in anchors:
+                url = urljoin(page_url, a["href"])
+                if urlparse(url).netloc != base_netloc:
+                    continue
+                total_internal += 1
+                if url in checked_links:
+                    continue
+                checked_links.add(url)
+                internal_urls.append(url)
+
+            total = len(internal_urls)
+            if total == 0:
+                _print_progress(
+                    "Checking links",
+                    1,
+                    1,
+                    f"(total: {total_internal}, valid: {len(links)}, invalid: {invalid_count})",
+                )
+                print()
+                continue
+
+            future_to_url = {
+                executor.submit(_url_is_valid, url, session): url for url in internal_urls
+            }
+
+            for idx, future in enumerate(concurrent.futures.as_completed(future_to_url), start=1):
+                url = future_to_url[future]
+                if future.result():
+                    links.add(url)
+                    to_visit.add(url)
+                    status = f"Valid: {url}"
+                else:
+                    invalid_count += 1
+                    status = f"Invalid: {url}"
+                _print_progress(
+                    "Checking links",
+                    idx,
+                    total,
+                    f"(total: {total_internal}, valid: {len(links)}, invalid: {invalid_count}) {status}",
+                )
+            print()
+
+    session.close()
     return links, total_internal, invalid_count
 
 
