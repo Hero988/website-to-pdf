@@ -61,25 +61,27 @@ def _display_line(line: str) -> None:
         print("\r" + line.ljust(120), end="", flush=True)
 
 
-def _url_is_valid(url: str) -> bool:
-    """Return ``True`` if ``url`` resolves successfully and is not a 404 page."""
+def _url_is_valid(url: str) -> tuple[bool, str | None]:
+    """Return ``(True, text)`` if ``url`` resolves successfully and is not a
+    404 page. ``text`` contains the fetched page content when available."""
 
     try:
         head_resp = requests.head(url, allow_redirects=True, timeout=5)
         if head_resp.status_code >= 400:
-            return False
+            return False, None
     except requests.RequestException:
         pass
 
     try:
         resp = requests.get(url, allow_redirects=True, timeout=5)
         if resp.status_code >= 400:
-            return False
-        if "error 404" in resp.text.lower():
-            return False
-        return True
+            return False, resp.text
+        text = resp.text
+        if "error 404" in text.lower():
+            return False, text
+        return True, text
     except requests.RequestException:
-        return False
+        return False, None
 
 
 def _print_progress(prefix: str, idx: int, total: int, message: str = "") -> None:
@@ -98,7 +100,14 @@ def _print_progress(prefix: str, idx: int, total: int, message: str = "") -> Non
     _display_line(line)
 
 
-def find_internal_links(base_url: str) -> tuple[set[str], int, int]:
+def _contains_keywords(text: str, keywords: Iterable[str]) -> bool:
+    """Return ``True`` if any keyword appears in ``text``."""
+
+    text_l = text.lower()
+    return any(k.lower() in text_l for k in keywords)
+
+
+def find_internal_links(base_url: str, keywords: Iterable[str] | None = None) -> tuple[set[str], int, int]:
     """Return all valid internal links for ``base_url``.
 
     The search is performed recursively so that links discovered on each
@@ -144,7 +153,12 @@ def find_internal_links(base_url: str) -> tuple[set[str], int, int]:
             if url in checked_links:
                 continue
             checked_links.add(url)
-            if _url_is_valid(url):
+            anchor_text = a.get_text()
+            href_text = a["href"]
+            if keywords and not _contains_keywords(anchor_text + " " + href_text, keywords):
+                continue
+            valid, text = _url_is_valid(url)
+            if valid and (not keywords or (text and _contains_keywords(text, keywords))):
                 links.add(url)
                 to_visit.add(url)
                 status = f"Valid: {url}"
@@ -210,19 +224,22 @@ def _progress(iterable: Iterable[str], prefix: str = ""):
     print()
 
 
-def process_domain(domain: str) -> None:
-    """Process ``domain`` by downloading and merging its pages."""
+def process_domain(domain: str, keywords: Iterable[str] | None = None) -> None:
+    """Process ``domain`` by downloading and merging its pages.
+
+    Only pages containing any of ``keywords`` are processed when provided."""
 
     info(f"Validating domain {domain}...")
     if not domain.startswith("http"):
         domain = "http://" + domain
 
-    if not _url_is_valid(domain):
+    valid, _ = _url_is_valid(domain)
+    if not valid:
         error(f"Domain '{domain}' is not reachable.")
         return
 
     info("Scanning for internal links...")
-    pages, total_internal, invalid_count = find_internal_links(domain)
+    pages, total_internal, invalid_count = find_internal_links(domain, keywords)
     valid_count = len(pages)
 
     if total_internal:
@@ -247,14 +264,15 @@ def process_domain(domain: str) -> None:
     info(f"Combined PDF saved as {output_pdf}")
 
 
-def main(domains: list[str]) -> None:
+def main(domains: list[str], keywords: Iterable[str] | None = None) -> None:
     for domain in domains:
-        process_domain(domain)
+        process_domain(domain, keywords)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(add_help=True)
     parser.add_argument('domains', nargs='*', help='Domain(s) to process')
+    parser.add_argument('--filter', nargs='+', help='Keywords to filter pages')
     args, _ = parser.parse_known_args()
 
     domains = args.domains
@@ -265,4 +283,6 @@ if __name__ == '__main__':
         print('No domain provided.')
         sys.exit(1)
 
-    main(domains)
+    keywords = args.filter
+
+    main(domains, keywords)

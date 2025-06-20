@@ -17,6 +17,13 @@ Run the script and provide one or more domains when prompted or via command line
 python domain_to_pdf.py example.com example.org
 ```
 
+To only process pages that contain specific keywords, pass them using the
+`--filter` option:
+
+```bash
+python domain_to_pdf.py example.com --filter christianity islam
+```
+
 The script will create a `pdfs/<domain>` directory for each domain with individual PDFs. A final merged PDF named `<domain>.pdf` is placed in the same directory.
 Internal links are validated as they are discovered so invalid pages are skipped immediately. Links discovered within internal pages are followed as well, ensuring every reachable page is processed. Any page that contains the text "Error 404" is skipped. All checked internal links are remembered so duplicates are not validated again.
 
